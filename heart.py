@@ -15,22 +15,36 @@ class heart:
         self.Ks=Ks#10**(-9) s/mL
         self.v0=V0#mL
         self.T=T
-    def Et(self,t): # mmHg*mL^(-1) 133g*cm^(-4)*s^(-2)
-        t = t%self.T
-        g1=(t/self.tau1)**self.m1#constant
-        g2=(t/self.tau2)**self.m2
-        k=(self.Emax-self.Emin)/max((g1/(1+g1)),(1/(1+g2)))# mmHg*mL^(-1) 133g*cm^(-4)*s^(-2)
-        return k*(g1/(1+g1))*(1/(1+g2))+self.Emin
-    def Rs(self,vt,t):#133*10^(9)*s^(-1)*g*cm^(-2)
-        rs=self.Ks*self.Et(t)*(vt-self.v0)
-        return rs
-    def p(self,vt,t):#10^(-9)*mmHg
-        pt=self.Et(t)*(vt-self.v0)
-        return pt
-    def qt(self,time,q):
-        return -q
-    def vt(self,q,time,delta_t):#input the flow to get the volume change with time
-        y,v=sp.integrate.quad(self.qt,time,time+delta_t,args=(q))
-        v_update=self.v0+y
-        return v_update
+    def Et(self,t,delay = None): # mmHg*mL^(-1) 133g*cm^(-4)*s^(-2)
+        if delay is None:
+            t = t%self.T
+            g1=(t/self.tau1)**self.m1#constant
+            g2=(t/self.tau2)**self.m2
+            k=(self.Emax-self.Emin)/max((g1/(1+g1)),(1/(1+g2)))# mmHg*mL^(-1) 133g*cm^(-4)*s^(-2)
+            return k*(g1/(1+g1))*(1/(1+g2))+self.Emin
+        else:
+            t = (t+self.T-delay)%self.T
+            g1=(t/self.tau1)**self.m1#constant
+            g2=(t/self.tau2)**self.m2
+            k=(self.Emax-self.Emin)/max((g1/(1+g1)),(1/(1+g2)))# mmHg*mL^(-1) 133g*cm^(-4)*s^(-2)
+            return k*(g1/(1+g1))*(1/(1+g2))+self.Emin
+    def Rs(self,vt,t,delay = None):#133*10^(9)*s^(-1)*g*cm^(-2)
+        if delay is None:
+            rs=self.Ks*self.Et(t)*(vt-self.v0)
+            return rs
+        else:
+            rs=self.Ks*self.Et(t,delay)*(vt-self.v0)
+            return rs
+    def p(self,vt,t,qout,delay = None):#10^(-9)*mmHg
+        #qout is the ejection flow or aortic flow
+        if delay is None:
+            pt=self.Et(t)*(vt-self.v0)-self.Rs(vt,t)*qout
+            return pt
+        else:
+            pt=self.Et(t,delay)*(vt-self.v0)-self.Rs(vt,t,delay)*qout
+            return pt
+    def dv(self,time,v,qin,qout):
+        return qin-qout
+        
+    
         

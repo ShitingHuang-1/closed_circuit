@@ -8,16 +8,12 @@ class PressureSystem:
         self.C = C
         self.Za = Za
         self.R = R
-        self.pi=0
-    def dp(self,time,p_initial,q,dq):
-        return self.Za *dq - p_initial / (self.R * self.C) + (self.R + self.Za) * q/(self.R*self.C)
-    def p(self,time,dt,q,dq):
-        delta_t=dt
-        t=[time,time+delta_t]
-        dp_update=sp.integrate.solve_ivp(self.dp,t_span=t,y0=[self.pi],args=[q,dq])
-        dp_sol=dp_update.y.flatten()[-1]
-        self.pi=dp_sol
-        return self.pi
-    def q1(self,p):#the flow at the output point of windkessel
-        return p/self.R
+    def dp(self,time,p,qin,pout):
+        return (qin-((p-pout)/self.R))/self.C
+    def qout(self,pin,pout):#q1
+        delta_p=pin-pout
+        return delta_p/self.R
+    def pi(self,qin,p):
+        return p+self.Za*qin
+        
         
