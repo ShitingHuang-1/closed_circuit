@@ -6,15 +6,16 @@ import math
 import matplotlib.pyplot as plt
 class heart:
     def __init__(self,tau1,tau2,m1,m2,Emax,Emin,Ks,V0,T):
-        self.tau1=tau1#s
-        self.tau2=tau2#s
-        self.m1=m1#constant
-        self.m2=m2
-        self.Emax=Emax#mmHg/mL
-        self.Emin=Emin#mmHg/mL
-        self.Ks=Ks#10**(-9) s/mL
-        self.v0=V0#mL
-        self.T=T
+        self.tau1 = tau1#s
+        self.tau2 = tau2#s
+        self.m1 = m1#constant
+        self.m2 = m2
+        self.Emax = Emax#mmHg/mL
+        self.Emin = Emin#mmHg/mL
+        self.Ks = Ks#10**(-9) s/mL
+        self.v0 = V0#mL
+        self.T = T
+        self.pini=1.0
     def Et(self,t,delay = None): # mmHg*mL^(-1) 133g*cm^(-4)*s^(-2)
         if delay is None:
             t = t%self.T
@@ -22,12 +23,14 @@ class heart:
             g2=(t/self.tau2)**self.m2
             k=(self.Emax-self.Emin)/max((g1/(1+g1)),(1/(1+g2)))# mmHg*mL^(-1) 133g*cm^(-4)*s^(-2)
             return k*(g1/(1+g1))*(1/(1+g2))+self.Emin
+            #return 2.4
         else:
             t = (t+self.T-delay)%self.T
             g1=(t/self.tau1)**self.m1#constant
             g2=(t/self.tau2)**self.m2
             k=(self.Emax-self.Emin)/max((g1/(1+g1)),(1/(1+g2)))# mmHg*mL^(-1) 133g*cm^(-4)*s^(-2)
             return k*(g1/(1+g1))*(1/(1+g2))+self.Emin
+            #return 0.2
     def Rs(self,vt,t,delay = None):#133*10^(9)*s^(-1)*g*cm^(-2)
         if delay is None:
             rs=self.Ks*self.Et(t)*(vt-self.v0)
@@ -39,10 +42,10 @@ class heart:
         #qout is the ejection flow or aortic flow
         if delay is None:
             pt=self.Et(t)*(vt-self.v0)-self.Rs(vt,t)*qout
-            return pt
+            return self.pini+pt
         else:
             pt=self.Et(t,delay)*(vt-self.v0)-self.Rs(vt,t,delay)*qout
-            return pt
+            return self.pini + pt
     def dv(self,time,v,qin,qout):
         return qin-qout
         

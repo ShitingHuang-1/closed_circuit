@@ -5,7 +5,7 @@ import sympy
 import math
 import matplotlib.pyplot as plt
 class ValveinP:
-    def __init__(self,density, eff_length, Aann, Kvo,Kvc,p_oc,diff_p):
+    def __init__(self,density, eff_length, Aann, Kvo,Kvc,p_oc):
         self.Mst=1#healthy
         self.Mrg=0#healthy
         self.rho=density#g/cm3
@@ -35,4 +35,4 @@ class ValveinP:
         Aeff=self.Aeff(time,xi)
         return (self.rho*self.leff)/Aeff
     def dq(self,time,q,xi,pin,pout):
-        return (1/self.L(time,xi))*(pin-pout-self.B(time,xi)*q*abs(q))#q0 is the input flow
+        return (pin-pout-self.B(time,xi)*q*abs(q))/self.L(time,xi)#q0 is the input flow
