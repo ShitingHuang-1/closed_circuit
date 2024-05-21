@@ -5,15 +5,15 @@ import math
 import matplotlib.pyplot as plt
 class PressureSystem:
     def __init__(self, C, Za, R):
-        self.C = C #mmHg s/mL
-        self.Za = Za #mmHg s2/mL
-        self.R = R #mL/mmHg
+        self.C = C 
+        self.Za = Za 
+        self.R = R #
     def dp(self,time,p,qin,pout):
-        return (qin-self.qout(p,pout))/self.C
+        return ((qin-self.qout(p,pout))/self.C)
     def qout(self,pin,pout):#q1
         delta_p=pin-pout
         return delta_p/self.R
     def pi(self,qin,p):
-        return p+self.Za*qin
+        return (p+self.Za*qin)
         
         
