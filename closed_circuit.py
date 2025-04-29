@@ -5,7 +5,7 @@ import math
 import matplotlib.pyplot as plt
 from typing import Union
 class PressureSystem:
-    def __init__(self, C, Za, R):
+    def __init__(self, C, Za, R = None):
         self.C = C 
         self.Za = Za 
         self.R = R 
@@ -22,6 +22,10 @@ class PressureSystem:
         return delta_p/self.R
     def pi(self,qin,p):
         return (p+self.Za*qin)
+    def qin(self, pin, pout):
+        return (pin - pout)/self.Za
+    def qout(self, pin, pout):
+        return (pin - pout)/self.R
 class lumped_resection_seperate:
     def __init__(self,C,trunk,artery,Rother, r_rate, right= True):
         self.C = C
@@ -72,15 +76,18 @@ class lumped_resection_unified:
         self.C = C
         self.Za = Za
         self.R = R
-        self.n = n
         self.N = N
+        if n == N:
+            self.n = N - 10**(-9)
+        else:
+            self.n = n
     def updated_R(self):
         R_ele = self.R*self.N
         R_update = R_ele/(self.N-self.n)
         return R_update
     def updated_C(self):
         C_ele = self.C/self.N
-        C_update = C_ele*self.n
+        C_update = C_ele*(self.N - self.n)
         return C_update
     def updated_Za(self):
         Za_ele = self.Za*self.N
@@ -151,30 +158,34 @@ class heart:
         self.t_vec = np.arange(0, self.T, self.deltat)
         if (self.T / self.deltat)%1 > 1e-10:
             raise ValueError('Time period should be integral multiple of delta t')
-            
-        if self.delay is None:
-            g1 = (self.t_vec/self.tau1)**self.m1
-            g2 = (self.t_vec/self.tau2)**self.m2
-        else:
-            self.t_vec = np.maximum(self.t_vec - delay,0)
-            g1 = (self.t_vec/self.tau1)**self.m1
-            g2 = (self.t_vec/self.tau2)**self.m2
-            
-        H1 = g1/(1+g1)
-        H2 = 1./(1+g2)
-        k = (self.Emax - self.Emin)/(np.max(H1*H2)+ 1e-6)
-        self.E_vec = k*H1*H2 + self.Emin
+        g1 = (self.t_vec/self.tau1)**self.m1
+        g2 = (self.t_vec/self.tau2)**self.m2
+        self.H1 = g1/(1+g1)
+        self.H2 = 1./(1+g2)
+        k = (self.Emax - self.Emin)/(np.max(self.H1*self.H2) + 1e-6)
+        self.E_vec = k*self.H1*self.H2 + self.Emin
         
     def Et(self, t): # mmHg*mL^(-1)
-        #num =int(round((round(t,7) % self.T)/self.deltat, 7))
-        #if num == 80:
-        #    num = 0
-        #return self.E_vec[num]
-        t_int = round(t * 100)
-        T_int = round(self.T * 100)
-        deltat_int = round(self.deltat * 100)
-        num = int(t_int % T_int/deltat_int)
-        return self.E_vec[num]
+        if self.delay is None:
+            #num =int(round((round(t,7) % self.T)/self.deltat, 7))
+            #if num == 80:
+            #    num = 0
+            #return self.E_vec[num]
+            inte = 1/self.deltat
+            t_int = round(t * inte)
+            T_int = round(self.T * inte)
+            deltat_int = round(self.deltat * inte)
+            num = int(t_int % T_int/deltat_int)
+            return self.E_vec[num]
+        else:
+            t = np.maximum(t - self.delay, 0)
+            inte = 1/self.deltat
+            t_int = round(t * inte)
+            T_int = round(self.T * inte)
+            deltat_int = round(self.deltat * inte)
+            num = int(t_int % T_int/deltat_int)
+            return self.E_vec[num]
+            
         
     def Rs(self,vt,t):#133*10^(9)*s^(-1)*g*cm^(-2)
         rs=self.Ks*self.Et(t)*(vt-self.v0)
@@ -185,77 +196,89 @@ class heart:
         #pt = self.Et(t)*(vt-self.v0)-self.Rs(vt,t)*qout
         pt = self.Et(t)*(vt-self.v0)
         return pt
-    
     def dv(self,time,v,qin,qout):
         return qin-qout
+class heart_fk:
+    def __init__(self, a, b, c, d, n, m, ppmin, ppmax, theta, neta, typ, ventricle = None, tpmin = None, tpmax = None, phi = None, v = None):
+        self.a = a*1333
+        self.b = b
+        self.c = c*1333
+        self.d = d*1333
+        self.n = n
+        self.m = m
+        self.tpmin = tpmin
+        self.tpmax = tpmax
+        self.v = v
+        self.ppmin = ppmin
+        self.ppmax = ppmax
+        self.theta = theta
+        self.neta = neta
+        self.typ = typ
+        if self.typ == 'ventricle':
+            self.k1 = None
+            self.k2 = None
+            self.ventricle = None
+            self.alpha = 0
+            self.phi = 1.156
+            if tpmin is None or tpmax is None or phi is None or v is None:
+                raise ValueError("For 'ventricle', tpmin, tpmax, phi and v should be provided.")
+        elif self.typ == 'atrium':
+            self.k1 = 0.01
+            self.k2 = 0.6
+            self.phi = 2.1152
+            self.ventricle = ventricle
+            if ventricle is None:
+                raise ValueError("For 'atrium', ventricle betaH must be provided.")
+        else:
+            raise ValueError("Invalid type. Must be 'ventricle' or 'atrium'.")
+    def tpH(self, H):
+        return self.tpmin + (self.theta**self.v/ (H**self.v+self.theta**self.v))*(self.tpmax - self.tpmin)
+    def betaH(self, H):
+        T0 = 1/H
+        if self.typ == 'ventricle':
+            return ((self.n + self.m)/self.n)*self.tpH(H)
+        elif self.typ == 'atrium':
+            betaHv = self.ventricle
+            return T0 + self.k1*betaHv
+    def alphaH(self, H):
+        T0 = 1/H
+        betaHv = self.ventricle
+        return self.betaH(H) - self.k2*betaHv
+    def ppH(self, H):
+        return self.ppmin + (H**self.neta/(H**self.neta + self.phi**self.neta)) * (self.ppmax - self.ppmin)
+    def ft(self, t, H):
+        T0 = 1/H
+        t = round(t % T0, 11)
+        # t = t - int(t/T0)
+        if t < 1e-8 or abs(t - T0) < 1e-8:
+            t = 0
+        if self.typ =='ventricle':
+            if t <= self.betaH(H) and t >= 0:
+                upper = ((self.betaH(H) - t)**self.m)*(t**self.n)
+                lower = (self.n**self.n)*(self.m**self.m)*(self.betaH(H)/(self.n + self.m))**(self.m + self.n)
+                return self.ppH(H)*upper/lower
+            elif t > self.betaH(H) and t<= T0:
+                return 0
+        elif self.typ =='atrium':
+            if t <= self.betaH(H) - T0 and t >= 0:
+                upper = ((t + T0 - self.alphaH(H))**self.n)*(self.betaH(H) - t - T0)**self.m
+                lower = (self.n**self.n)*(self.m**self.m)*((self.betaH(H) - self.alphaH(H))/(self.n + self.m))**(self.m + self.n)
+                return self.ppH(H) *upper/lower
+            elif t > self.betaH(H) - T0 and t <= self.alphaH(H):
+                return 0
+            elif t > self.alphaH(H) and t < T0:
+                upper = ((t - self.alphaH(H))**self.n) * (self.betaH(H) - t)**self.m
+                lower = (self.n**self.n)*(self.m**self.m)*((self.betaH(H) - self.alphaH(H))/(self.n + self.m))**(self.m + self.n)
+                return self.ppH(H)*upper/lower
+        else:
+            raise ValueError(f"Invalid input for self.typ: {self.typ}. Expected 'ventricle' or 'atrium'.")
+    def p(self, v, t, H):
+        if self.ft(t, H) is None:
+            print('t:', t, 'H', H, 'ft:', self.ft(t, H), 'ppH:', self.ppH(H), 'type:', self.typ)
+        return (self.a*((v - self.b)**2) + (self.c*v - self.d)*self.ft(t, H))
+    def dv(self, time, v, qin, qout):
+        return qin-qout
 
-class ode_solve:
-    def dydt(self,t,y):
-        v_lv = y[0] 
-        v_la = y[1]
-        q_av = y[2]
-        q_mv = y[3]
-        xi_av = y[4]
-        xi_mv = y[5]
-        #pressure of capillaries in systemic circulation
-        pa = y[6]
-        v_rv = y[7]
-        v_ra = y[8]
-        q_tv = y[9]
-        q_pv = y[10]
-        xi_tv = y[11]
-        xi_pv = y[12]
-        #pressure of capillaries in pulmonary circulation
-        pb = y[13]
-        #calculate parameters
-        #systemic
-        p_la = la.p(v_la,t,0.85*T)
-        p_lv = lv.p(v_lv,t)
-        #p_aa: pressure at the coupling point of av and capillaries
-        p_aa = cap_s.pi(q_av,pa)
-        #pulmonary
-        p_ra = ra.p(v_ra,t,0.85*T)
-        p_rv = rv.p(v_rv,t)
-        #q_cap2: flow out the capillaries of pulmonary circulation
-        q_cap2 = cap_p.qout(pb,p_la)
-        #p_pa: pressure at the coupling point of pv and capillaries
-        p_pa = cap_p.pi(q_tv,pb)
-        #q_cap1: flow out the capillaries of systemic circulation
-        q_cap1 = cap_s.qout(pa,p_ra)
-        #derivative
-        #la
-        dv_la = la.dv(t,v_la,q_cap2,q_mv)
-        dxi_mv = mv.dxi(t,xi_mv,p_la,p_lv)
-        dq_mv = mv.dq(t,q_mv,xi_mv,p_la,p_lv)
-        #lv
-        dv_lv = lv.dv(t,v_lv,q_mv,q_av)
-        dxi_av = av.dxi(t,xi_av,p_lv,p_aa)
-        dq_av = av.dq(t,q_av,xi_av,p_lv,p_aa)
-        #cap sys
-        dpa = cap_s.dp(t,pa,q_av,p_ra)
-        #ra
-        dv_ra = ra.dv(t,v_ra,q_cap1,q_tv)
-        dxi_tv = tv.dxi(t,xi_tv,p_ra,p_rv)
-        dq_tv = tv.dq(t,q_tv,xi_tv,p_ra,p_rv)
-        #rv
-        dv_rv = rv.dv(t,v_rv,q_tv,q_pv)
-        dxi_pv = pv.dxi(t,xi_pv,p_rv,p_pa)
-        dq_pv = pv.dq(t,q_pv,xi_pv,p_rv,p_pa)
-        #cap pul
-        dpb = cap_p.dp(t,pb,q_pv,p_la)
-        #derivative vector
-        dy = np.array([dv_lv, dv_la, 
-                   dq_av, dq_mv, 
-                   dxi_av, dxi_mv, 
-                   dpa, 
-                   dv_rv, dv_ra, 
-                   dq_tv, dq_pv, 
-                   dxi_tv, dxi_pv, 
-                   dpb])
-        return dy
-    def ode_sol(self,t,y0,t_eval):
-        sol = sp.integrate.solve_ivp(self.dydt, t_span=t, y0=y0, t_eval=t_eval, method='LSODA')
-        return sol
 class ParameterBounds:
     def __init__(self, T):
         self.tau1_v = (0.01 * T, 2 * T)
@@ -284,72 +307,80 @@ class ParameterBounds:
         self.R_p = (10, 1000)
         self.Za_p = (0.1, 200)
         self.delay_a = (0,T)
-def dydt(t,y):
-    v_lv = y[0]
-    v_la = y[1]
-    q_av = y[2]
-    q_mv = y[3]
-    xi_av = y[4]
-    xi_mv = y[5]
-    #pressure of capillaries in systemic circulation
-    pa = y[6]
-    v_rv = y[7]
-    v_ra = y[8]
-    q_tv = y[9]
-    q_pv = y[10]
-    xi_tv = y[11]
-    xi_pv = y[12]
-    #pressure of capillaries in pulmonary circulation
-    pb = y[13]
-    
-    #calculate parameters
-    #systemic
-    p_la = la.p(v_la,t)
-    p_lv = lv.p(v_lv,t)
-    #p_aa: pressure at the coupling point of av and capillaries
-    p_aa = cap_s.pi(q_av,pa)
-    #pulmonary
-    p_ra = ra.p(v_ra,t)
-    p_rv = rv.p(v_rv,t)
-    #q_cap2: flow out the capillaries of pulmonary circulation
-    q_cap2 = cap_p.qout(pb,p_la)
-    #p_pa: pressure at the coupling point of pv and capillaries
-    p_pa = cap_p.pi(q_tv,pb)
-    #q_cap1: flow out the capillaries of systemic circulation
-    q_cap1 = cap_s.qout(pa,p_ra)
-    
-    #derivative
-    #la
-    dv_la = la.dv(t,v_la,q_cap2,q_mv)
-    dxi_mv = mv.dxi(t,xi_mv,p_la,p_lv)
-    dq_mv = mv.dq(t,q_mv,xi_mv,p_la,p_lv)
-    #lv
-    dv_lv = lv.dv(t,v_lv,q_mv,q_av)
-    dxi_av = av.dxi(t,xi_av,p_lv,p_aa)
-    dq_av = av.dq(t,q_av,xi_av,p_lv,p_aa)
-    #cap sys
-    dpa = cap_s.dp_original(t,pa,q_av,p_ra)
-    #ra
-    dv_ra = ra.dv(t,v_ra,q_cap1,q_tv)
-    dxi_tv = tv.dxi(t,xi_tv,p_ra,p_rv)
-    dq_tv = tv.dq(t,q_tv,xi_tv,p_ra,p_rv)
-    #rv
-    dv_rv = rv.dv(t,v_rv,q_tv,q_pv)
-    dxi_pv = pv.dxi(t,xi_pv,p_rv,p_pa)
-    dq_pv = pv.dq(t,q_pv,xi_pv,p_rv,p_pa)
-    #cap pul
-    dpb = cap_p.dp_original(t,pb,q_pv,p_la)
-    
-    #derivative vector
-    dy = np.array([dv_lv, dv_la, 
-                   dq_av, dq_mv, 
-                   dxi_av, dxi_mv, 
-                   dpa, 
-                   dv_rv, dv_ra, 
-                   dq_tv, dq_pv, 
-                   dxi_tv, dxi_pv, 
-                   dpb])
-    return dy
-
-    
-        
+class res_circu_pul:
+    def __init__(self, rpc0, vphi, vstar, rpa0, pphi, rpv0, cpa, vpcmax, cpv, cpcb, zpa):
+        self.rpc0 = rpc0
+        self.vphi = vphi
+        self.vstar = vstar
+        self.rpa0 = rpa0
+        self.pphi = pphi
+        self.rpv0 = rpv0
+        self.cpa = cpa
+        self.vpcmax = vpcmax
+        self.cpv = cpv
+        self.cpcb = cpcb
+        self.zpa = zpa# cpc bar
+    # resistance of pulmonary artery
+    def rpa(self, va, ppl):
+        rpa = (self.vphi*(va - self.vstar)**4 + self.rpa0) *(1 + ppl/self.pphi)
+        return rpa
+    def drpa(self, va, ppl, dva, dppl):
+        drpa = 4*(self.vphi(-self.vstar + va)**3)*(1+(ppl/self.pphi))*dva + dppl*(self.rpa0 + self.vphi*(-self.vstar + va)**4)/self.pphi
+        return drpa
+    # resistance of pulmonary vein
+    def rpv(self, va, ppl):
+        rpv = (self.vphi*(va - self.vstar)**4 + self.rpv0) *(1 + ppl/self.pphi)
+        return rpv
+    def drpv(self, va, ppl, dva, dppl):
+        drpv = 4*(self.vphi(-self.vstar + va)**3)*(1+(ppl/self.pphi))*dva + dppl*(self.rpv0 + self.vphi*(-self.vstar + va)**4)/self.pphi
+        return drpv
+    # pressure of pulmonary capillary
+    def ppc(self, pa, ptmb):
+        ppc = pa + ptmb
+        return ppc
+    # the flow between artery and capillary
+    def qpac(self, ppa, ppc, rcpa, rpa):
+        q = (ppa - ppc)/ (rcpa + rpa)
+        return q
+    # the flow into the pulmonary capillary
+    def dvpc(self, ppam, ppc, rcpa, rpa, ppvm,  rcpv):
+        dvpc = ((ppam - ppc)/ (rcpa+rpa)) - ((ppc - ppvm)/ rcpv)
+        return dvpc
+    def dppam(self, qav, rpa, rcpa, ppc, ppam):
+        #flow between the cap and artery 
+        qpca = (ppam - ppc)/ (rpa+rcpa)
+        qpa = qav - qpca
+        dppam = qpa/self.cpa
+        return dppam
+    def rcpv(self, vpc):
+        rcpv = 0.5*self.rpc0*(self.vpcmax/vpc)**2
+        return rcpv
+    def rcpa(self, vpc):
+        rcpa = 0.5*self.rpc0*(self.vpcmax/vpc)**2
+        return rcpa
+    def dppvm(self, ppc, ppvm, pla, rcpv, rpv):
+        #flow between the cap and vein
+        qpvc = (ppc - ppvm)/rcpv
+        qla = (ppvm - pla)/ rpv
+        dppvm = (qpvc - qla)/self.cpv
+        return dppvm
+    def ptmb(self, vpc):
+        if vpc >= 0.5*self.vpcmax and vpc <=self.vpcmax:
+            ma = (self.vpcmax - 0.001)/(self.vpcmax - 13.6*self.cpcb - 0.001)
+            mb = 13.6/(6.908 + np.log(ma - 0.999))
+            mc = 20.4 - 6.908*mb
+            ptmb = mc - mb*np.log(((self.vpcmax - 0.001)/ (vpc-0.001)) - 0.999)
+            return ptmb
+        elif vpc >= 0 and vpc <= 0.5*self.vpcmax:
+            mc = 0.124002
+            mb = -5.502
+            ptmb = mc - mb*(0.7 - ((vpc - 0.001)/ (self.vpcmax-0.001)))**2
+            return ptmb
+        else:
+            return 0
+    def qpvc(self, ppc, ppvm, rcpv):
+        qpvc = (ppc - ppvm)/rcpv
+        return qpvc
+    def ppa(self, ppam, qpv):
+        ppa = ppam + qpv * self.zpa
+        return ppa
