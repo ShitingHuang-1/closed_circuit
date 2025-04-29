@@ -9,7 +9,7 @@ from p_tqdm import p_map
 import sys
 import os
 sys.path.append(os.path.abspath("/home/postgrads/2654133H/code/closed_loop/MCMC/"))
-from closed_circuit import *
+from compartments import *
 def ODE(params):
     C_p, Za_p, R_p, Emax_rv, Emin_rv = params
     rv=heart(tau1 = 0.269*T, tau2 = 0.452*T, m1 = 1.32, m2 = 27.4, Emax = Emax_rv, Emin = Emin_rv, V0 = 10, T = T, deltat = 0.01) # Ks, V0 ,T
