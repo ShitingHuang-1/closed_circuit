@@ -163,7 +163,7 @@ if __name__ == "__main__":
     'num_vars': 6,
     'names': ['C_s', 'Za_s','R_s','C_p','Za_p','R_p'],
     'bounds': [[0.0002, 0.006], [20, 600],[300,6000],[0.001,0.04], [3, 100], [30, 900] ]}
-    param_values =  sobol_sam.sample(problem, 32768, calc_second_order = False) 
+    param_values =  sobol_sam.sample(problem, 32768*2, calc_second_order = False) 
     param_point = np.array([0.001, 120, 1500, 0.002, 20, 200])
     param_values = np.vstack((param_values, param_point))
     t_end=10
