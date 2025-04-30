@@ -1,17 +1,23 @@
-# Code for lumped parameter model of global circulatory system
-## 1. File descriptions
-1. Left_right_heart
+# Code for lumped parameter lung resection model
+## File descriptions
 
-The basic simulation of whole circulation, it can get the pressure, volume and P-V loop from it
+1. compartments.py
+Defined class which is used in all code files
 
-2. PSO
-The PSO code fit the target value
+2. baseline.ipynb
+The code is used to simulate baseline condition
 
-3. not_opt
-Sampling points to cover most conditions for chosen parameter range
+3. afterload_contractility.ipynb
+The code is used to simulate different contractility and afterload change
 
-4. resection_sim
-Simulating the resection surgery by pointed removed number
+4. not_opt
+The code is used to do exhaustive search to find parameter values
 
-5. resection
-Simulating the resection surgery by pointed removed rate
+5. local_sens.ipynb
+The code is used to do local sensitivity analysis
+
+6. sobol_function.ipynb
+The code is used to do sobol sensitivity analysis
+
+7. generate_sobol_m
+The code generates results which is used to do sobol analysis
